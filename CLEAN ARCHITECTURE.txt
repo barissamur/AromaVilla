@@ -39,16 +39,150 @@ Görevler:
 Adımlar(Blank Solution oluşturduktan sonra):
 1- src ve tests adında kalsörler oluşturduk
 
+--------------------------------------------------------------------------------------------------
+
 2- src içerisine "Class Library" projesi ekliyoruz ve adını "ApplicationCore" diyoruz. Location sonuna "\src" klasörünü ekle.
+
+--------------------------------------------------------------------------------------------------
 
 3- src içerisine "Class Library" projesi ekliyoruz ve adını "Infrastructure" diyoruz. Location sonuna "\src" klasörünü ekle.
 
+--------------------------------------------------------------------------------------------------
+
 4- src içerisine ASP Core MVC projesi ekliyoruz adını "Web" diyoruz. Location sonuna "\src" klasörünü ekle. (Authentication type: Individual Acoounts)
+
+--------------------------------------------------------------------------------------------------
 
 5- tests klasörüne "xUnit Test project" projesi ekliyoruz adını.Location sonuna "\tests" klasörünü ekle.
 
+--------------------------------------------------------------------------------------------------
+
+6- projemizi GitHub'a koyduk
+
+--------------------------------------------------------------------------------------------------
+
+7- ApplicationCore projesinde "Entities" adında bir klasör ve içerisinde "BaseEntity" adında bir sınıf oluştur.
+
+--------------------------------------------------------------------------------------------------
+
+8- Sınıf içine aşağıdaki prop. ekle
+     public virtual int Id { get; set; }
+
+--------------------------------------------------------------------------------------------------
+
+9- Aynı klasörde Category.cs oluştur BaseEntity'den miras al aşağıdaki prop ekle
+	public string Name { get; set; } = null!;
+
+--------------------------------------------------------------------------------------------------
+
+10- Aynı klasörde Brand.cs oluştur BaseEntity'den miras al aşağıdaki prop ekle
+	public string Name { get; set; } = null!;
+
+--------------------------------------------------------------------------------------------------
+
+11- Aynı klasörde Product.cs oluştur BaseEntity'den miras al aşağıdaki prop ekle
+	  public string Name { get; set; } = null!;
+        public string? Description { get; set; }
+        public decimal Price { get; set; }
+        public string? PictureUri { get; set; }
+        public int CategoryId { get; set; }
+        public int BrandId { get; set; }
+        public Category Category { get; set; } = null!;
+        public Brand Brand { get; set; } = null!;
+
+--------------------------------------------------------------------------------------------------
+
+12- "ApplicationCore" projesine "Interfaces" adında bir klasör açıp içerisine "IRepository.cs" interface'i açıyoruz. (Repository Design)
+
+public interface IRepository<T> where T : BaseEntity
+    {
+        Task<T?> GetByIdAsync(int id);
+        Task<List<T>> GetAllAsync();
+        Task<T> AddAsync(T entity);
+        Task UpdateAsync(T entity);
+        Task DeleteAsync(T entity);
+    }
+
+--------------------------------------------------------------------------------------------------
+
+13- Solutionın kendisine README.md dosyası ekliyoruz
+
+# AromaVilla
+A Sample N-layered .NET Core Project Demonstrating Clean Architecture and the Generic Reposityory Pattern
+
+## Packages
+
+## ApplicationCore
+```
+Install-Package Ardalis.Specification -v 6.1.0
+```
+
+--------------------------------------------------------------------------------------------------
+
+14- Package Manager Console'dan src\ApplicationCore seçili iken aşağıdakini yükle
+
+Install-Package Ardalis.Specification -v 6.1.0 
+
+--------------------------------------------------------------------------------------------------
+
+15- IRepository.cs içine aşağıdaki metotları da ekle
+
+Task<List<T>> GetAllAsync(ISpecification<T> specification); 
+Task<T> CountAsync(ISpecification<T> specification);
+Task<T> FirstAsync(ISpecification<T> specification);
+Task<T?> FirsOrDefaultAsync(ISpecification<T> specification);
+
+--------------------------------------------------------------------------------------------------
+
+16- "Infrastructure" içine "Data" klasörü aç ve "ShopContext.cs" sınıfı oluştur
+
+--------------------------------------------------------------------------------------------------
+
+17- EF paketlerini "Infrastructure" içine kur
+
+Install-Package Microsoft.EntityFrameworkCore -v 6.0.15
+Install-Package Microsoft.EntityFrameworkCore.Tools -v 6.0.15
+Install-Package Npgsql.EntityFrameworkCore.PostgreSQL -v 6.0.8
+
+--------------------------------------------------------------------------------------------------
+
+18- "ShopContext.cs" içierisini
+
+public class ShopContext : DbContext
+    {
+        public ShopContext(DbContextOptions<ShopContext> options) : base(options)
+        {
+
+        }
+
+        public DbSet<Category> Categories => Set<Category>();
+        public DbSet<Brand> Brands => Set<Brand>();
+        public DbSet<Product> Products => Set<Product>();
+
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            // Fluent api ayar dosyası oluşturacaz içini burda okutacaz
+            modelBuilder.ApplyConfigurationsFromAssembly(Assembly.GetExecutingAssembly());
+        }
+    }
+
+--------------------------------------------------------------------------------------------------
+
+19- Data klasörü içine "Config" klasörü aç. İçine Category ayarları için "CategoryConfiguration.cs" sınıfı oluştur. Interface'i implement et
+
+ public class CategoryConfiguration : IEntityTypeConfiguration<Category>
+    {
+        public void Configure(EntityTypeBuilder<Category> builder)
+        {
+            builder.Property(x => x.Name)
+                .HasMaxLength(100);
+        }
+    }
 
 
+--------------------------------------------------------------------------------------------------
+
+20- 19. maddedeki işlemlerin aynısını BrandConfiguration için yap
 
 
 
