@@ -1,0 +1,64 @@
+CLEAN ARCHITECTURE
+(ONION ARCHITECTURE)
+
+E-book: 
+https://aka.ms/webappebook
+
+Docs: 
+https://learn.microsoft.com/en-us/dotnet/architecture/modern-web-apps-azure/
+ 
+Github: 
+https://github.com/dotnet-architecture/eShopOnWeb
+
+Kullanacağımız Veritabanı:
+PostgreSQL (postgres:123 port:5432)
+
+Proje Yapısı
+src
+- Web			=> MVC
+- Infrastructure	=> DbContext, Implementations
+- ApplicationCore	=> Entities, Interfaces
+tests
+- UnitTests		=> Brim Testleri
+
+Tasarım Prensipleri
+- Separation of concerns
+- Encapsulation
+- Dependency inversion
+- Single responsibility
+- Dont reapeat yourself
+- Persistence ignorance
+- Bounded contexts
+
+Görevler:
+1. Blank Solution Oluştur
+2. src ve test Solution klasörlerini oluştur
+3. 4 adet proje olştur
+4. Github'a yükle
+
+Adımlar(Blank Solution oluşturduktan sonra):
+1- src ve tests adında kalsörler oluşturduk
+
+2- src içerisine "Class Library" projesi ekliyoruz ve adını "ApplicationCore" diyoruz. Location sonuna "\src" klasörünü ekle.
+
+3- src içerisine "Class Library" projesi ekliyoruz ve adını "Infrastructure" diyoruz. Location sonuna "\src" klasörünü ekle.
+
+4- src içerisine ASP Core MVC projesi ekliyoruz adını "Web" diyoruz. Location sonuna "\src" klasörünü ekle. (Authentication type: Individual Acoounts)
+
+5- tests klasörüne "xUnit Test project" projesi ekliyoruz adını.Location sonuna "\tests" klasörünü ekle.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
