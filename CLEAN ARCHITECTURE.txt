@@ -194,11 +194,26 @@ public class ShopContext : DbContext
 
 --------------------------------------------------------------------------------------------------
 
-22- program.cs' e servislere 
+22- program.cs add services
 
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
-builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseSqlServer(connectionString));
+// Add services to the container.
+builder.Services.AddDbContext<ShopContext>(options => options
+    .UseNpgsql(builder.Configuration
+        .GetConnectionString("ShopContext")));
+
+builder.Services.AddDbContext<AppIdentityDbContext>(options => options
+    .UseNpgsql(builder.Configuration
+        .GetConnectionString("AppIdentityDbContext")));
+
+
+builder.Services.AddDatabaseDeveloperPageExceptionFilter();
+
+
+
+builder.Services.AddDefaultIdentity<ApplicationUser>(options => options.SignIn.RequireConfirmedAccount = true)
+    .AddRoles<IdentityRole>()
+    .AddEntityFrameworkStores<AppIdentityDbContext>();
+builder.Services.AddControllersWithViews();
 
 --------------------------------------------------------------------------------------------------
 
@@ -212,9 +227,75 @@ Add-Migration InitialCreate -context ShopContext -OutputDir Data/Migrations
 
 --------------------------------------------------------------------------------------------------
 
-25- 
+25- "Web" katmanındaki "ApplicationDbContext.cs" sınıfını "Infrastructure" katmanına taşı
+
+"Web" içindeki "Data" klasörünü sil ve hata veren yerleri yoruma al
+
+"Infrastructure" paketlerinde sadece bunlar olacak
+
+Microsoft.AspNetCore.Identity.EntityFrameworkCore
+Microsoft.EntityFrameworkCore
+Microsoft.EntityFrameworkCore.Tools
+Npgsql.EntityFrameworkCore.PostgreSQL
 
 
+"Web" paketleri
+
+Microsoft.AspNetCore.Diagnostics.EntityFrameworkCore
+Microsoft.AspNetCore.Identity.UI
+Microsoft.EntityFrameworkCore.Tools
+
+--------------------------------------------------------------------------------------------------
+
+26- "Infrastructure" içine "Identity" adınde klasör aç
+
+AppIdentityDbContext.cs sınıfı oluştur
+
+    public class AppIdentityDbContext : IdentityDbContext<ApplicationUser>
+    {
+        public AppIdentityDbContext(DbContextOptions<AppIdentityDbContext> options) : base(options)
+        {
+
+        }
+    }
+
+
+ApplicationUser.cs sınıfı oluştur
+--------------------------------------------------------------------------------------------------
+
+27- program.cs içerisinde servislere 
+
+// Add services to the container.
+builder.Services.AddDbContext<ShopContext>(options => options
+    .UseNpgsql(builder.Configuration
+        .GetConnectionString("ShopContext")));
+
+builder.Services.AddDbContext<AppIdentityDbContext>(options => options
+    .UseNpgsql(builder.Configuration
+        .GetConnectionString("AppIdentityDbContext")));
+
+ekle
+
+--------------------------------------------------------------------------------------------------
+
+28- appsettings.json ConnectionStrings değiştir
+
+  "ConnectionStrings": {
+    "AppIdentityDbContext": "Host=localhost;Database=IdentityContextDb;Username=postgres;Password=123",
+    "ShopContext": "Host=localhost;Database=ShopContextDb;Username=postgres;Password=123"
+  },
+
+--------------------------------------------------------------------------------------------------
+
+29- Migration ve Update leri yap
+
+Add-Migration InitialIdentity -context AppIdentityDbContext -OutputDir Identity/Migrations
+
+Update-Database -context AppIdentityDbContext
+
+--------------------------------------------------------------------------------------------------
+
+30-
 
 
 
