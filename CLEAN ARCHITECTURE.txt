@@ -182,11 +182,37 @@ public class ShopContext : DbContext
 
 --------------------------------------------------------------------------------------------------
 
-20- 19. maddedeki işlemlerin aynısını BrandConfiguration için yap
+20- 19. maddedeki işlemlerin aynısını BrandConfiguration ve ProductConfiguration için yap ancak Product için ekstra olarak ekle
 
+   builder.Property(x => x.Price)
+                .HasPrecision(18, 2);
 
+--------------------------------------------------------------------------------------------------
 
+21-  appsettings'e connection string oluştur
+ "ShopContext": "Host=localhost;Database=ShopContextDb;Username=postgres;Password=123"
 
+--------------------------------------------------------------------------------------------------
+
+22- program.cs' e servislere 
+
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+builder.Services.AddDbContext<ApplicationDbContext>(options =>
+    options.UseSqlServer(connectionString));
+
+--------------------------------------------------------------------------------------------------
+
+23- migration. birden fazla context olacağı için Context'i seç
+
+Add-Migration InitialCreate -context ShopContext -OutputDir Data/Migrations
+
+--------------------------------------------------------------------------------------------------
+
+24- Update-Database -context ShopContext
+
+--------------------------------------------------------------------------------------------------
+
+25- 
 
 
 
