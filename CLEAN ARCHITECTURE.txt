@@ -127,10 +127,15 @@ Install-Package Ardalis.Specification -v 6.1.0
 
 15- IRepository.cs içine aşağıdaki metotları da ekle
 
-Task<List<T>> GetAllAsync(ISpecification<T> specification); 
-Task<T> CountAsync(ISpecification<T> specification);
-Task<T> FirstAsync(ISpecification<T> specification);
-Task<T?> FirsOrDefaultAsync(ISpecification<T> specification);
+	  Task<T?> GetByIdAsync(int id);
+        Task<List<T>> GetAllAsync();
+        Task<List<T>> GetAllAsync(ISpecification<T> specification);
+        Task<T> AddAsync(T entity);
+        Task UpdateAsync(T entity);
+        Task DeleteAsync(T entity);
+        Task<int> CountAsync(ISpecification<T> specification);
+        Task<T> FirstAsync(ISpecification<T> specification);
+        Task<T?> FirsOrDefaultAsync(ISpecification<T> specification);
 
 --------------------------------------------------------------------------------------------------
 
@@ -295,7 +300,214 @@ Update-Database -context AppIdentityDbContext
 
 --------------------------------------------------------------------------------------------------
 
-30-
+30- Parfüm resimleri olan bir site bul - https://www.perfume.com/
+
+Web > wwwroot > img > produtcs içine resimleri at
+
+--------------------------------------------------------------------------------------------------
+
+31-  Infrastructure > Data içine ShopContextSeed.cs oluştur 
+
+ShopContextSeed.cs.txt içerisini kopyala yapıştır
+
+--------------------------------------------------------------------------------------------------
+
+32- LoginPartial inject leri değiştir
+
+@inject SignInManager<ApplicationUser> SignInManager
+@inject UserManager<ApplicationUser> UserManager
+
+--------------------------------------------------------------------------------------------------
+
+33- Program.cs'e run'dan önce ekle
+
+using (var scope = app.Services.CreateScope())
+{
+    var shopContext = scope.ServiceProvider.GetRequiredService<ShopContext>(); // db'yi program çalışmadan önce enjekte ettik
+    await ShopContextSeed.SeedAsync(shopContext);
+} 
+
+--------------------------------------------------------------------------------------------------
+
+33- "Application Core" içerisine "Constant" klasörü aç "AuthorizationConstants.cs" sınıfı aç
+
+ public static class AuthorizationConstants
+    {
+        public const string DEFAULT_DEMO_USER = "demouser@exampler.com";
+        public const string DEFAULT_ADMIN_USER = "admin@example.com";
+        public const string DEFAULT_PASSWORD = "P@ssword1";
+
+        public static class Roles
+        {
+            public const string ADMINSTRATOR = "Admin";
+        }
+    }
+
+--------------------------------------------------------------------------------------------------
+
+34- "Identity" klasörü içine "AppIdentityDbContextSeed.cs" snıfı oluştur
+
+ public class AppIdentityDbContextSeed
+    {
+        public static async Task SeedAsync(AppIdentityDbContext db, RoleManager<IdentityRole> roleManager, UserManager<ApplicationUser> userManager)
+        {
+            await db.Database.MigrateAsync();
+
+            if (await roleManager.Roles.AnyAsync() || await userManager.Users.AnyAsync()) return;
+
+            await roleManager.CreateAsync(new IdentityRole(AuthorizationConstants.Roles.ADMINSTRATOR));
+
+            var adminUser = new ApplicationUser()
+            {
+                Email = AuthorizationConstants.DEFAULT_ADMIN_USER,
+                UserName= AuthorizationConstants.DEFAULT_ADMIN_USER,
+                EmailConfirmed = true
+            };
+            await userManager.CreateAsync(adminUser, AuthorizationConstants.DEFAULT_PASSWORD);
+            await userManager.AddToRoleAsync(adminUser, AuthorizationConstants.Roles.ADMINSTRATOR);
+
+            var demoUser = new ApplicationUser()
+            {
+                Email = AuthorizationConstants.DEFAULT_DEMO_USER,
+                UserName= AuthorizationConstants.DEFAULT_DEMO_USER,
+                EmailConfirmed = true
+            };
+            await userManager.CreateAsync(demoUser, AuthorizationConstants.DEFAULT_PASSWORD);
+        }
+    }
+
+--------------------------------------------------------------------------------------------------
+
+35- Program.cs içerisinde "var shopContext = scope.ServiceProvider.GetRequiredService<ShopContext>(); // db'yi program çalışmadan önce enjekte ettik" kodunun altına
+
+    var identityContext = scope.ServiceProvider.GetRequiredService<AppIdentityDbContext>();
+    var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
+    var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+
+    await ShopContextSeed.SeedAsync(shopContext);
+    await AppIdentityDbContextSeed.SeedAsync(identityContext, roleManager, userManager);
+
+ekliyoruz
+
+--------------------------------------------------------------------------------------------------
+
+36- Infrastructure/Data  içine "EfRepository.cs" sınıfı aç ve "IRepository.cs" i implement et
+
+EFRepository.cs.txt dosyasını bu sınıfa yapıştır
+
+/*
+_db.Set<T>().Add(entity);
+_db.Add(entity);  		bu iki metot aynı şey
+
+
+Specification kurulumu için 
+Install-Package Ardalis.Specification.EntityFrameworkCore  -v 6.1.0
+Install-Package Ardalis.Specification  -v 6.1.0
+
+örnek olarak 
+
+        public Task<T> FirstAsync(ISpecification<T> specification)
+        {
+            return _db.Set<T>().WithSpecification(specification).FirstAsync(); bu kod gelecek olan sorguyu karşılayıp türünü generic olarak dönüştürecek gibi düşünebiliriz
+        }
+*/
+
+--------------------------------------------------------------------------------------------------
+
+37- Web katmanında "Program.cs" içinde servislere ekle (web katmanında interface kullanacağımız için "IRepository" gördüğümüz yerde "EFRepository" kullan gibi düşünebiliriz)
+
+builder.Services.AddScoped(typeof(IRepository<>), typeof(EFRepository<>)); 
+
+--------------------------------------------------------------------------------------------------
+
+38- usinglere ekle/değiştir
+global using ApplicationCore.Interfaces;
+global using ApplicationCore.Entities;
+
+--------------------------------------------------------------------------------------------------
+
+39- Projeyi denemek için Home > Index > View içine 
+@inject IRepository<Product> ProductRepo
+@{
+    ViewData["Title"] = "Home Page";
+}
+
+<div class="text-center">
+    <h1 class="display-4">Welcome</h1>
+    <p>Learn about <a href="https://docs.microsoft.com/aspnet/core">building Web apps with ASP.NET Core</a>.</p>
+</div>
+
+<ul>
+    @foreach (var item in await ProductRepo.GetAllAsync())
+    {
+        <li>@item.Name @item.Price.ToString("c2")</li>
+
+    }
+</ul>
+
+--------------------------------------------------------------------------------------------------
+
+40- Uygulamanın para birimini deiştirmek için "Program.cs" app.UseStaticFiles(); altına ekle
+
+app.UseRequestLocalization("en-US");
+
+--------------------------------------------------------------------------------------------------
+
+41- 
+
+--------------------------------------------------------------------------------------------------
+
+42- 
+
+--------------------------------------------------------------------------------------------------
+
+43- 
+
+--------------------------------------------------------------------------------------------------
+
+44- 
+
+--------------------------------------------------------------------------------------------------
+
+45- 
+
+--------------------------------------------------------------------------------------------------
+
+46- 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

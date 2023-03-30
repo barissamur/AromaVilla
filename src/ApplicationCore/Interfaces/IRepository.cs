@@ -16,7 +16,7 @@ namespace ApplicationCore.Interfaces
         Task<T> AddAsync(T entity);
         Task UpdateAsync(T entity);
         Task DeleteAsync(T entity);
-        Task<T> CountAsync(ISpecification<T> specification);
+        Task<int> CountAsync(ISpecification<T> specification);
         Task<T> FirstAsync(ISpecification<T> specification);
         Task<T?> FirsOrDefaultAsync(ISpecification<T> specification);
     }

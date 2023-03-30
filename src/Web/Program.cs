@@ -1,5 +1,7 @@
+global using Infrastructure.Identity;
+global using ApplicationCore.Interfaces;
+global using ApplicationCore.Entities;
 using Infrastructure.Data;
-using Infrastructure.Identity;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
@@ -14,10 +16,9 @@ builder.Services.AddDbContext<AppIdentityDbContext>(options => options
     .UseNpgsql(builder.Configuration
         .GetConnectionString("AppIdentityDbContext")));
 
-
 builder.Services.AddDatabaseDeveloperPageExceptionFilter();
 
-
+builder.Services.AddScoped(typeof(IRepository<>), typeof(EFRepository<>));
 
 builder.Services.AddDefaultIdentity<ApplicationUser>(options => options.SignIn.RequireConfirmedAccount = true)
     .AddRoles<IdentityRole>()
@@ -40,7 +41,7 @@ else
 
 app.UseHttpsRedirection();
 app.UseStaticFiles();
-
+app.UseRequestLocalization("en-US");
 app.UseRouting();
 
 app.UseAuthentication();
@@ -50,5 +51,16 @@ app.MapControllerRoute(
     name: "default",
     pattern: "{controller=Home}/{action=Index}/{id?}");
 app.MapRazorPages();
+
+using (var scope = app.Services.CreateScope())
+{
+    var shopContext = scope.ServiceProvider.GetRequiredService<ShopContext>(); // db'yi program çalýþmadan önce enjekte ettik
+    var identityContext = scope.ServiceProvider.GetRequiredService<AppIdentityDbContext>();
+    var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
+    var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+
+    await ShopContextSeed.SeedAsync(shopContext);
+    await AppIdentityDbContextSeed.SeedAsync(identityContext, roleManager, userManager);
+}
 
 app.Run();
