@@ -125,7 +125,7 @@ Install-Package Ardalis.Specification -v 6.1.0
 
 --------------------------------------------------------------------------------------------------
 
-15- IRepository.cs içine aşağıdaki metotlarla değiştir
+15- IRepository.cs içine aşağıdaki metotları da ekle
 
 	  Task<T?> GetByIdAsync(int id);
         Task<List<T>> GetAllAsync();
@@ -199,9 +199,7 @@ public class ShopContext : DbContext
 
 --------------------------------------------------------------------------------------------------
 
-22-  Install-Package Microsoft.AspNetCore.Diagnostics.EntityFrameworkCore -Version 6.0.15
-
-program.cs add services
+22- program.cs add services
 
 // Add services to the container.
 builder.Services.AddDbContext<ShopContext>(options => options
@@ -224,8 +222,7 @@ builder.Services.AddControllersWithViews();
 
 --------------------------------------------------------------------------------------------------
 
-23- Web katmanına - Install-Package Microsoft.EntityFrameworkCore.Tools -v 6.0.15
-Web katmanını set startup yap migration. birden fazla context olacağı için Context'i seç
+23- migration. birden fazla context olacağı için Context'i seç
 
 Add-Migration InitialCreate -context ShopContext -OutputDir Data/Migrations
 
@@ -617,252 +614,39 @@ namespace Web.Controllers
 
 --------------------------------------------------------------------------------------------------
 
-49- https://fonts.google.com/specimen/Lato fontunu projeye ekle
-
-Lato içinden istediklerini seç sağ alttan linkini layout'a ekle. css'i site.css body içine yapıştır
-
+49-
 
 --------------------------------------------------------------------------------------------------
 
-50- "css ellipsis 2 lines" taşan satırları "..." olarak gizlemek için googlede aratalım. taşacak olan class'ın css'ine yaz
-
-.product-name {
-    height: 3rem;
-    overflow:hidden;
-    text-overflow:ellipsis;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient:vertical;
-    font-weight:600;
-}
+50-
 
 --------------------------------------------------------------------------------------------------
 
-51- wwwroot/lib'e 'add client library' ile fontawesome indiriyoruz. layout linklere ekle
-
-<link href="~/lib/font-awesome/css/all.min.css" rel="stylesheet" />
+51-
 
 --------------------------------------------------------------------------------------------------
 
-52- Index.cshtml'de button'u değiştir
-
-<button class="btn btn-sm btn-outline-dark">
-	<i class="fa-solid fa-cart-plus"></i>
-</button>
+52-
 
 --------------------------------------------------------------------------------------------------
 
-53-Index'e CategoryId ve BrandId göndermesi için formu geliştirelim
-
-<form class="d-flex p-2 mb-3 border bg-light rounded" method="get">
-    <select asp-for="CategoryId" asp-items="Model.Categories" class="form-select w-auto me-2">
-        <option value="">Category</option>
-    </select>
-
-    <select asp-for="BrandId" asp-items="Model.Brands" class="form-select w-auto me-2">
-        <option value="">Brand</option>
-    </select>
-
-    <button class="btn btn-primary">
-        <i class="fa-solid fa-magnifying-glass"></i>
-    </button>
-</form>
+53-
 
 --------------------------------------------------------------------------------------------------
 
-54- AppCore Specifications kalsörü aç ProductsFilterSpecifications sınıfı oluştur ctor'una filtreleri oluştur
-
- public class ProductsFilterSpecifications : Specification<Product>
-    {
-        public ProductsFilterSpecifications(int? categoryId, int? brandId)
-        {
-            if (categoryId != null)
-                Query.Where(x => x.CategoryId == categoryId); // sorguya Where ekle
-
-            if (brandId != null)
-                Query.Where(x => x.BrandId == brandId);
-        }
-    }
+54-
 
 --------------------------------------------------------------------------------------------------
 
-55- "HomeViewModelService.cs" snıfında "GetHomeViewModelAsync" metodunu değiştir
-
- public async Task<HomeViewModel> GetHomeViewModelAsync(int? categoryId, int? brandId, int pageId = 1)
-        {
-            var specProducts = new ProductsFilterSpecifications(categoryId, brandId);
-
-            var products = await _productRepo.GetAllAsync(specProducts);
-            var vm = new HomeViewModel()
-            {
-                Products = products.Select(x => new ProductViewModel()
-                {
-                    Id = x.Id,
-                    Name = x.Name,
-                    PictureUri= x.PictureUri,
-                    Price = x.Price,
-                }).ToList(),
-                Categories = await GetCategoriesAsync(),
-                Brands = await GetBrandsAsync(),
-                CategoryId= categoryId,
-                BrandId= brandId
-            };
-
-            return vm;
-        }
+55-
 
 --------------------------------------------------------------------------------------------------
 
-56-  "Web" katmanına "Constant.cs" sınıfı aç. Sayfada ki ürün sayısnıı yaz
-
-    public static class Constants
-    {
-        public const int ITEMS_PER_PAGE = 4;
-    }
---------------------------------------------------------------------------------------------------
-
-57-Web/Models içine "PaginationInfoViewModel.cs" sınfı oluştur propları ekle
-
- public class PaginationInfoViewModel
-    {
-        public int PageId { get; set; }
-        public int TotalItems { get; set; }
-        public int ItemsOnPage { get; set; }
-        public int TotalPages => (int)Math.Ceiling(TotalItems / (double)Constants.ITEMS_PER_PAGE);
-        public bool HasPrevious => PageId > 1;
-        public bool HasNext => PageId < TotalPages;
-        public int RangeStart => (PageId - 1) * Constants.ITEMS_PER_PAGE + 1;
-        public int RangeEnd => RangeStart + ItemsOnPage - 1;
-    }
+56-
 
 --------------------------------------------------------------------------------------------------
 
-58- HomeViewModel.cs içine yeni prop ekle
-
-   public PaginationInfoViewModel PaginationInfo { get; set; } = null!;
-
---------------------------------------------------------------------------------------------------
-
-59- "ProductsFilterSpecifications.cs" içine 
-
-     public ProductsFilterSpecifications(int? categoryId, int? brandId, int skip, int take) : this(categoryId, brandId) 
-        {
-            Query.Skip(skip).Take(take);
-        }
-
---------------------------------------------------------------------------------------------------
-
-60- "HomeViewModelService.cs" içerisine "GetHomeViewModelAsync" metodunu güncelle
-
-  public async Task<HomeViewModel> GetHomeViewModelAsync(int? categoryId, int? brandId, int pageId = 1)
-        {
-            var specProducts = new ProductsFilterSpecifications(categoryId, brandId);
-            var specProductsPaginated = new ProductsFilterSpecifications(categoryId, brandId, (pageId -1) * Constants.ITEMS_PER_PAGE, Constants.ITEMS_PER_PAGE);
-
-            var totalItems = await _productRepo.CountAsync(specProducts);
-            var products = await _productRepo.GetAllAsync(specProductsPaginated);
-            var vm = new HomeViewModel()
-            {
-                Products = products.Select(x => new ProductViewModel()
-                {
-                    Id = x.Id,
-                    Name = x.Name,
-                    PictureUri= x.PictureUri,
-                    Price = x.Price,
-                }).ToList(),
-                Categories = await GetCategoriesAsync(),
-                Brands = await GetBrandsAsync(),
-                CategoryId= categoryId,
-                BrandId= brandId,
-                PaginationInfo = new PaginationInfoViewModel()
-                {
-                    PageId= pageId,
-                    ItemsOnPage = products.Count,
-                    TotalItems= totalItems
-                }
-            };
-
-            return vm;
-        }
-
---------------------------------------------------------------------------------------------------
-
-61- Home/Index.cshtml sayfasına en alta ekle
-
-@{ var pi = Model.PaginationInfo; }
-
-<div class="d-flex justify-content-center">
-    <nav aria-label="Page navigation example">
-        <ul class="pagination">
-            @if (pi.HasPrevious)
-            {
-                <li class="page-item">
-                    <a class="page-link" asp-route-categoryId="@Model.CategoryId" asp-route-brandId="@Model.BrandId" asp-route-pageId="@(pi.PageId-1)" aria-label="Previous">
-                        <span aria-hidden="true">&laquo;</span>
-                    </a>
-                </li>
-            }
-            else
-            {
-                <li class="page-item disabled">
-                    <a class="page-link" aria-label="Previous">
-                        <span aria-hidden="true">&laquo;</span>
-                    </a>
-                </li>
-            }
-
-            @for (int i = 1; i <= pi.TotalPages; i++)
-            {
-                <li class="page-item @(i == pi.PageId ? "active" : "")">
-                    <a class="page-link" asp-route-categoryId="@Model.CategoryId" asp-route-brandId="@Model.BrandId" asp-route-pageId="@i">
-                        @i
-                    </a>
-                </li>
-
-            }
-            @if (pi.HasNext)
-            {
-                <li class="page-item">
-                    <a class="page-link" asp-route-categoryId="@Model.CategoryId" asp-route-brandId="@Model.BrandId" asp-route-pageId="@(pi.PageId+1)" aria-label="Next">
-                        <span aria-hidden="true">&raquo;</span>
-                    </a>
-                </li>
-            }
-            else
-            {
-                <li class="page-item disabled">
-                    <a class="page-link" aria-label="Next">
-                        <span aria-hidden="true">&raquo;</span>
-                    </a>
-                </li>
-            }
-        </ul>
-    </nav>
-</div>
-<div class="text-center">Showing @pi.RangeStart-@pi.RangeEnd of @pi.TotalItems products</div>
-
---------------------------------------------------------------------------------------------------
-
-62-
-
---------------------------------------------------------------------------------------------------
-
-63-
-
---------------------------------------------------------------------------------------------------
-
-64-
-
---------------------------------------------------------------------------------------------------
-
-65-
-
---------------------------------------------------------------------------------------------------
-
-66-
-
-
-
+57-
 
 
 
