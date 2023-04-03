@@ -8,9 +8,9 @@ using System.Threading.Tasks;
 
 namespace ApplicationCore.Specifications
 {
-    public class ProductsFilterSpecifications : Specification<Product>
+    public class ProductsFilterSpecification : Specification<Product>
     {
-        public ProductsFilterSpecifications(int? categoryId, int? brandId)
+        public ProductsFilterSpecification(int? categoryId, int? brandId)
         {
             if (categoryId != null)
                 Query.Where(x => x.CategoryId == categoryId); // sorguya Where ekle
@@ -19,7 +19,7 @@ namespace ApplicationCore.Specifications
                 Query.Where(x => x.BrandId == brandId);
         }
 
-        public ProductsFilterSpecifications(int? categoryId, int? brandId, int skip, int take) : this(categoryId, brandId) 
+        public ProductsFilterSpecification(int? categoryId, int? brandId, int skip, int take) : this(categoryId, brandId) 
         {
             Query.Skip(skip).Take(take);
         }

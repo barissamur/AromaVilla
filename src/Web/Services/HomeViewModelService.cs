@@ -18,8 +18,8 @@ namespace Web.Services
         }
         public async Task<HomeViewModel> GetHomeViewModelAsync(int? categoryId, int? brandId, int pageId = 1)
         {
-            var specProducts = new ProductsFilterSpecifications(categoryId, brandId);
-            var specProductsPaginated = new ProductsFilterSpecifications(categoryId, brandId, (pageId -1) * Constants.ITEMS_PER_PAGE, Constants.ITEMS_PER_PAGE);
+            var specProducts = new ProductsFilterSpecification(categoryId, brandId);
+            var specProductsPaginated = new ProductsFilterSpecification(categoryId, brandId, (pageId -1) * Constants.ITEMS_PER_PAGE, Constants.ITEMS_PER_PAGE);
 
             var totalItems = await _productRepo.CountAsync(specProducts);
             var products = await _productRepo.GetAllAsync(specProductsPaginated);
