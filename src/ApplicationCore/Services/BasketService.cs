@@ -77,6 +77,7 @@ namespace ApplicationCore.Services
 
             return basket;
         }
+
         public async Task<Basket> SetQuantities(string buyerId, Dictionary<int, int> quantities)
         {
             var basket = await GetOrCreateBasketAsync(buyerId);
@@ -91,7 +92,6 @@ namespace ApplicationCore.Services
             }
 
             return basket;
-
         }
 
         public async Task TransferBasketAsync(string sourceBuyerId, string destinationBuyerId)

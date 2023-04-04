@@ -943,47 +943,441 @@ yerine
     }
 --------------------------------------------------------------------------------------------------
 
-66-
+66-Infrastructure > Data > Config içine "BasketConfiguration.cs" oluştur
+
+ public class BasketConfiguration : IEntityTypeConfiguration<Basket>
+    {
+        public void Configure(EntityTypeBuilder<Basket> builder)
+        {
+            builder.Property(x => x.BuyerId)
+                .IsRequired();
+        }
+    }
 
 --------------------------------------------------------------------------------------------------
 
-67-
+67- Tekrar migration ve update yap 
+
+Add-Migration BasketAdded -context ShopContext -OutputDir Data/Migrations
+Update-Database -context ShopContext
 
 --------------------------------------------------------------------------------------------------
 
-68-
+68- ApplicationCore > Interfaces "IBasketService.cs" interface aç
+
+    public interface IBasketService
+    {
+        Task<Basket> GetOrCreateBasketAsync(string buyerId);
+        Task<Basket> AddItemToBasketAsync(string buyerId, int productId, int quantity);
+        Task EmptyBasketAsync(string buyerId);
+        Task DeleteBasketItemAsync(string buyerId, int productId);
+        Task<Basket> SetQuantities(string buyerId, Dictionary<int, int> quantities);
+        Task TransferBasketAsync(string sourceBuyerId, string destinationBuyerId);
+    }
 
 --------------------------------------------------------------------------------------------------
 
-69-
+69- ApplicationCore > Specifications içine "BasketWithItemsSpecification.cs" aç
+
+ public BasketWithItemsSpecification(string buyerId)
+        {
+            Query.Where(x => x.BuyerId == buyerId)
+                .Include(x => x.Items)
+                .ThenInclude(x => x.Product);
+        }
+
+
 
 --------------------------------------------------------------------------------------------------
 
-70-
+70- ApplicationCore içine Services klasörü aç içine "BasketService.cs" sınıfı aç
+
+using ApplicationCore.Entities;
+using ApplicationCore.Interfaces;
+using ApplicationCore.Specifications;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace ApplicationCore.Services
+{
+    public class BasketService : IBasketService
+    {
+        private readonly IRepository<Basket> _basketRepo;
+        private readonly IRepository<BasketItem> _basketItemRepo;
+        private readonly IRepository<Product> _productRepo;
+
+        public BasketService(IRepository<Basket> basketRepo,
+            IRepository<BasketItem> basketItemRepo,
+            IRepository<Product> productRepo)
+        {
+            _basketRepo = basketRepo;
+            _basketItemRepo = basketItemRepo;
+            _productRepo = productRepo;
+        }
+        public async Task<Basket> AddItemToBasketAsync(string buyerId, int productId, int quantity)
+        {
+            var basket = await GetOrCreateBasketAsync(buyerId);
+            var basketItem = basket.Items.FirstOrDefault(x => x.ProductId == productId);
+
+            if (basketItem == null)
+            {
+                basketItem = new BasketItem()
+                {
+                    ProductId = productId,
+                    Quantity = quantity,
+                    Product = (await _productRepo.GetByIdAsync(productId))!
+                };
+                basket.Items.Add(basketItem);
+            }
+            else
+            {
+                basketItem.Quantity += quantity;
+            }
+            await _basketRepo.UpdateAsync(basket);
+            return basket;
+        }
+
+        public async Task DeleteBasketItemAsync(string buyerId, int productId)
+        {
+            var basket = await GetOrCreateBasketAsync(buyerId);
+            var basketItem = basket.Items.FirstOrDefault(x => x.ProductId == productId);
+            if (basketItem == null) return;
+            await _basketItemRepo.DeleteAsync(basketItem);
+        }
+
+        public async Task EmptyBasketAsync(string buyerId)
+        {
+            var basket = await GetOrCreateBasketAsync(buyerId);
+
+            foreach (var item in basket.Items.ToList())
+            {
+                await _basketItemRepo.DeleteAsync(item);
+            }
+        }
+
+        public async Task<Basket> GetOrCreateBasketAsync(string buyerId)
+        {
+            var specBasket = new BasketWithItemsSpecification(buyerId);
+            var basket = await _basketRepo.FirsOrDefaultAsync(specBasket);
+
+            if (basket == null)
+            {
+                basket = new Basket() { BuyerId = buyerId };
+                await _basketRepo.AddAsync(basket);
+            }
+
+            return basket;
+        }
+        public async Task<Basket> SetQuantities(string buyerId, Dictionary<int, int> quantities)
+        {
+            var basket = await GetOrCreateBasketAsync(buyerId);
+
+            foreach (var item in basket.Items)
+            {
+                if (quantities.ContainsKey(item.ProductId))
+                {
+                    item.Quantity = quantities[item.ProductId];
+                    await _basketItemRepo.UpdateAsync(item);
+                }
+            }
+
+            return basket;
+
+        }
+
+        public async Task TransferBasketAsync(string sourceBuyerId, string destinationBuyerId)
+        {
+            var specSourceBasket = new BasketWithItemsSpecification(sourceBuyerId);
+            var sourceBasket = await _basketRepo.FirsOrDefaultAsync(specSourceBasket);
+
+            if (sourceBasket == null || sourceBasket.Items.Count == 0)
+                return;
+
+            var destinationBasket = await GetOrCreateBasketAsync(destinationBuyerId);
+
+            foreach (var item in sourceBasket.Items)
+            {
+                var targetItem = destinationBasket.Items.FirstOrDefault(x => x.ProductId == item.ProductId);
+
+                if (targetItem == null)
+                    destinationBasket.Items.Add(new BasketItem()
+                    {
+                        ProductId = item.ProductId,
+                        Quantity = item.Quantity,
+                    });
+                else
+                {
+                    targetItem.Quantity += item.Quantity;
+                }
+
+                await _basketRepo.UpdateAsync(destinationBasket);
+                await _basketRepo.DeleteAsync(sourceBasket);
+            }
+        }
+    }
+}
+
 
 --------------------------------------------------------------------------------------------------
 
-71-
+71- Layout <partial view> altına ekle
+
+                    <partial name="_LoginPartial" />
+                    @{ /* todo : burayı ivewcomponent yap,sepetteki toplam öğe sayısını göster */ }
+                    <ul class="navbar-nav">
+                        <li class="nav-item">
+                            <a class="nav-link text-dark" asp-area="" asp-controller="Basket" asp-action="Index">
+                                Basket
+                                <span data-total-items class="badge bg-success">0</span>
+                            </a>
+                        </li>
+                    </ul>
 
 --------------------------------------------------------------------------------------------------
 
-72-
+72- Home>Index te foreach içindekini değiştir
+
+                <button class="btn btn-sm btn-outline-dark" data-add-to-basket="@item.Id">
+                    <i class="fa-solid fa-cart-plus"></i>
+                </button>
 
 --------------------------------------------------------------------------------------------------
 
-73-
+73-Home > Index script kısmına yaz
+
+@section Scripts{
+    <script>
+        $("[data-add-to-basket").click(function () {
+            let productId = $(this).data("add-to-basket");
+            let url = "@Url.Action("AddToBasket", "Basket")";
+
+            $.post(url, { productId }, function (data) {
+                $("[data-total-items]").text(data.totalItems);
+            });
+        });
+    </script>
+}
 
 --------------------------------------------------------------------------------------------------
 
-74-
+74- Web > Models içine "BasketViewModel.cs" oluştur
+
+    public class BasketViewModel
+    {
+        public int Id { get; set; }
+        public string BuyerId { get; set; } = null!;
+        public List<BasketItemViewModel> Items { get; set; } = new();
+        public int TotalItems => Items.Sum(x => x.Quantity);
+        public decimal TotalPrice => Items.Sum(X => X.TotalPrice);
+    }
+
+
+
+
 
 --------------------------------------------------------------------------------------------------
 
-75-
+75- Web > Model içine "BasketItemViewModel.cs" oluştur
+
+    public class BasketItemViewModel
+    {
+        public int Id { get; set; }
+        public int ProductId { get; set; }
+        public int ProductName { get; set; }
+        public decimal UnitPrice { get; set; }
+        public int Quantity { get; set; }
+        public string? PictureUri { get; set; }
+        public decimal TotalPrice => Quantity * UnitPrice;
+    }
 
 --------------------------------------------------------------------------------------------------
 
-76-
+76- Web > Interface içine "IBasketViewModelService.cs" interface aç
+
+ public interface IBasketViewModelService
+    {
+        Task<BasketViewModel> GetBasketViewModelAsync();
+
+        Task<BasketViewModel> AddItemToBasketAsync(int productId, int quantity);
+    }
+
+--------------------------------------------------------------------------------------------------
+
+77- Web > Interface içine "IHomeViewModelService.cs" interface aç
+
+    public interface IHomeViewModelService
+    {
+        Task<HomeViewModel> GetHomeViewModelAsync(int? categoryId, int? brandId, int pageId = 1);
+    }
+--------------------------------------------------------------------------------------------------
+
+78- Web > Constants içine ekle
+
+	public const string BASKET_COOKIENAME = "AnonId";
+
+--------------------------------------------------------------------------------------------------
+
+79- Program.cs içine ekle
+
+builder.Services.AddScoped<IBasketViewModelService, BasketViewModelService>();
+builder.Services.AddHttpContextAccessor();
+
+--------------------------------------------------------------------------------------------------
+
+80- Web içine Extensions klasörü aç "MappingExtensions.cs" klasörü aç 
+önce "program.cs" içine "global using Web.Extensions;" ekle
+
+using System.Runtime.CompilerServices;
+
+namespace Web.Extensions
+{
+    public static class MappingExtensions
+    {
+        public static BasketViewModel ToBasketViewModel(this Basket basket)
+        {
+            return new BasketViewModel()
+            {
+                BuyerId = basket.BuyerId,
+                Id = basket.Id,
+                Items = basket.Items.Select(x => new BasketItemViewModel()
+                {
+                    Id = basket.Id,
+                    PictureUri = x.Product.PictureUri,
+                    ProductId = x.ProductId,
+                    ProductName = x.Product.Name,
+                    Quantity = x.Quantity,
+                    UnitPrice = x.Product.Price
+                }).ToList()
+            };
+        }
+    }
+}
+
+
+--------------------------------------------------------------------------------------------------
+
+81- Web > Serivce içine "BasketViewModelService.cs" oluştur
+
+using System.Security.Claims;
+using Web.Interfaces;
+
+namespace Web.Services
+{
+    public class BasketViewModelService : IBasketViewModelService
+    {
+        private readonly IBasketService _basketService;
+        private readonly IHttpContextAccessor _httpContextAccessor;
+
+        private HttpContext? HttpContext => _httpContextAccessor.HttpContext;
+        private string? UserId => HttpContext?.User.FindFirstValue(ClaimTypes.NameIdentifier); // giriş yapanın id'si
+        private string? AnonId => HttpContext?.Request.Cookies[Constants.BASKET_COOKIENAME]; //cookie'nin adı
+        private string BuyerId => UserId ?? AnonId ?? CreateAnonymousId();
+
+        private string _createAnonId = null!;
+        private string CreateAnonymousId()
+        {
+            if (_createAnonId == null)
+            {
+                _createAnonId = Guid.NewGuid().ToString();
+                HttpContext?.Response.Cookies.Append(Constants.BASKET_COOKIENAME, _createAnonId, new CookieOptions()
+                {
+                    Expires = DateTime.Now.AddDays(14), // 14 gün geçerli olsun
+                    IsEssential = true // gerekli bir cookie mi?
+                });
+            }
+
+            return _createAnonId;
+        }
+
+        public BasketViewModelService(IBasketService basketService,
+            IHttpContextAccessor httpContextAccessor)
+        {
+            _basketService = basketService;
+            _httpContextAccessor = httpContextAccessor;
+        }
+        public async Task<BasketViewModel> AddItemToBasketAsync(int productId, int quantity)
+        {
+            var basket = await _basketService.AddItemToBasketAsync(BuyerId, productId, quantity);
+            return basket.ToBasketViewModel();
+
+        }
+
+        public async Task<BasketViewModel> GetBasketViewModelAsync()
+        {
+            var basket = await _basketService.GetOrCreateBasketAsync(BuyerId);
+
+            return basket.ToBasketViewModel();
+        }
+
+
+    }
+}
+
+
+--------------------------------------------------------------------------------------------------
+
+82-  MVC katmanına Controller içine "BasketController" oluştur
+
+    public class BasketController : Controller
+    {
+        private readonly IBasketViewModelService _basketViewModelService;
+
+        public BasketController(IBasketViewModelService basketViewModelService)
+        {
+            _basketViewModelService = basketViewModelService;
+        }
+        public async Task<IActionResult> AddToBasket(int productId, int quantity = 1)
+        {
+            var vm = await _basketViewModelService.AddItemToBasketAsync(productId, quantity);
+            return Json(vm);
+        }
+    }
+
+--------------------------------------------------------------------------------------------------
+
+83- Basket'i Context'e DbSet olarak eklemedik tablo adı farklı oluştu onu düzenlicez
+
+tabloyu silmek için
+update-database InitialCreate -context ShopContext
+
+migration'u silmek için
+remove-migration -context ShopContext
+
+ShopContext içine ekle
+	  public DbSet<Basket> Baskets => Set<Basket>();
+        public DbSet<BasketItem> BasketItems => Set<BasketItem>();
+
+tekrar migration ekledik
+Add-Migration InitialCreate -context ShopContext -OutputDir Data/Migrations
+
+yeni tablo isimlerini veritabanına eklemek için
+Update-Database -context ShopContext
+--------------------------------------------------------------------------------------------------
+
+84-
+
+--------------------------------------------------------------------------------------------------
+
+85-
+
+--------------------------------------------------------------------------------------------------
+
+86-
+
+--------------------------------------------------------------------------------------------------
+
+87-
+
+--------------------------------------------------------------------------------------------------
+
+88-
+
+--------------------------------------------------------------------------------------------------
+
+89-
 
 
 

@@ -125,7 +125,7 @@ Install-Package Ardalis.Specification -v 6.1.0
 
 --------------------------------------------------------------------------------------------------
 
-15- IRepository.cs içine aşağıdaki metotları da ekle
+15- IRepository.cs içine aşağıdaki metotlarla değiştir
 
 	  Task<T?> GetByIdAsync(int id);
         Task<List<T>> GetAllAsync();
@@ -199,7 +199,9 @@ public class ShopContext : DbContext
 
 --------------------------------------------------------------------------------------------------
 
-22- program.cs add services
+22-  Install-Package Microsoft.AspNetCore.Diagnostics.EntityFrameworkCore -Version 6.0.15
+
+program.cs add services
 
 // Add services to the container.
 builder.Services.AddDbContext<ShopContext>(options => options
@@ -222,7 +224,8 @@ builder.Services.AddControllersWithViews();
 
 --------------------------------------------------------------------------------------------------
 
-23- migration. birden fazla context olacağı için Context'i seç
+23- Web katmanına - Install-Package Microsoft.EntityFrameworkCore.Tools -v 6.0.15
+Web katmanını set startup yap migration. birden fazla context olacağı için Context'i seç
 
 Add-Migration InitialCreate -context ShopContext -OutputDir Data/Migrations
 
@@ -614,39 +617,658 @@ namespace Web.Controllers
 
 --------------------------------------------------------------------------------------------------
 
-49-
+49- https://fonts.google.com/specimen/Lato fontunu projeye ekle
+
+Lato içinden istediklerini seç sağ alttan linkini layout'a ekle. css'i site.css body içine yapıştır
+
 
 --------------------------------------------------------------------------------------------------
 
-50-
+50- "css ellipsis 2 lines" taşan satırları "..." olarak gizlemek için googlede aratalım. taşacak olan class'ın css'ine yaz
+
+.product-name {
+    height: 3rem;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient:vertical;
+    font-weight:600;
+}
 
 --------------------------------------------------------------------------------------------------
 
-51-
+51- wwwroot/lib'e 'add client library' ile fontawesome indiriyoruz. layout linklere ekle
+
+<link href="~/lib/font-awesome/css/all.min.css" rel="stylesheet" />
 
 --------------------------------------------------------------------------------------------------
 
-52-
+52- Index.cshtml'de button'u değiştir
+
+<button class="btn btn-sm btn-outline-dark">
+	<i class="fa-solid fa-cart-plus"></i>
+</button>
 
 --------------------------------------------------------------------------------------------------
 
-53-
+53-Index'e CategoryId ve BrandId göndermesi için formu geliştirelim
+
+<form class="d-flex p-2 mb-3 border bg-light rounded" method="get">
+    <select asp-for="CategoryId" asp-items="Model.Categories" class="form-select w-auto me-2">
+        <option value="">Category</option>
+    </select>
+
+    <select asp-for="BrandId" asp-items="Model.Brands" class="form-select w-auto me-2">
+        <option value="">Brand</option>
+    </select>
+
+    <button class="btn btn-primary">
+        <i class="fa-solid fa-magnifying-glass"></i>
+    </button>
+</form>
 
 --------------------------------------------------------------------------------------------------
 
-54-
+54- AppCore Specifications kalsörü aç ProductsFilterSpecifications sınıfı oluştur ctor'una filtreleri oluştur
+
+ public class ProductsFilterSpecifications : Specification<Product>
+    {
+        public ProductsFilterSpecifications(int? categoryId, int? brandId)
+        {
+            if (categoryId != null)
+                Query.Where(x => x.CategoryId == categoryId); // sorguya Where ekle
+
+            if (brandId != null)
+                Query.Where(x => x.BrandId == brandId);
+        }
+    }
 
 --------------------------------------------------------------------------------------------------
 
-55-
+55- "HomeViewModelService.cs" snıfında "GetHomeViewModelAsync" metodunu değiştir
+
+ public async Task<HomeViewModel> GetHomeViewModelAsync(int? categoryId, int? brandId, int pageId = 1)
+        {
+            var specProducts = new ProductsFilterSpecifications(categoryId, brandId);
+
+            var products = await _productRepo.GetAllAsync(specProducts);
+            var vm = new HomeViewModel()
+            {
+                Products = products.Select(x => new ProductViewModel()
+                {
+                    Id = x.Id,
+                    Name = x.Name,
+                    PictureUri= x.PictureUri,
+                    Price = x.Price,
+                }).ToList(),
+                Categories = await GetCategoriesAsync(),
+                Brands = await GetBrandsAsync(),
+                CategoryId= categoryId,
+                BrandId= brandId
+            };
+
+            return vm;
+        }
 
 --------------------------------------------------------------------------------------------------
 
-56-
+56-  "Web" katmanına "Constant.cs" sınıfı aç. Sayfada ki ürün sayısnıı yaz
+
+    public static class Constants
+    {
+        public const int ITEMS_PER_PAGE = 4;
+    }
+--------------------------------------------------------------------------------------------------
+
+57-Web/Models içine "PaginationInfoViewModel.cs" sınfı oluştur propları ekle
+
+ public class PaginationInfoViewModel
+    {
+        public int PageId { get; set; }
+        public int TotalItems { get; set; }
+        public int ItemsOnPage { get; set; }
+        public int TotalPages => (int)Math.Ceiling(TotalItems / (double)Constants.ITEMS_PER_PAGE);
+        public bool HasPrevious => PageId > 1;
+        public bool HasNext => PageId < TotalPages;
+        public int RangeStart => (PageId - 1) * Constants.ITEMS_PER_PAGE + 1;
+        public int RangeEnd => RangeStart + ItemsOnPage - 1;
+    }
 
 --------------------------------------------------------------------------------------------------
 
-57-
+58- HomeViewModel.cs içine yeni prop ekle
+
+   public PaginationInfoViewModel PaginationInfo { get; set; } = null!;
+
+--------------------------------------------------------------------------------------------------
+
+59- "ProductsFilterSpecifications.cs" içine 
+
+     public ProductsFilterSpecifications(int? categoryId, int? brandId, int skip, int take) : this(categoryId, brandId) 
+        {
+            Query.Skip(skip).Take(take);
+        }
+
+--------------------------------------------------------------------------------------------------
+
+60- "HomeViewModelService.cs" içerisine "GetHomeViewModelAsync" metodunu güncelle
+
+  public async Task<HomeViewModel> GetHomeViewModelAsync(int? categoryId, int? brandId, int pageId = 1)
+        {
+            var specProducts = new ProductsFilterSpecifications(categoryId, brandId);
+            var specProductsPaginated = new ProductsFilterSpecifications(categoryId, brandId, (pageId -1) * Constants.ITEMS_PER_PAGE, Constants.ITEMS_PER_PAGE);
+
+            var totalItems = await _productRepo.CountAsync(specProducts);
+            var products = await _productRepo.GetAllAsync(specProductsPaginated);
+            var vm = new HomeViewModel()
+            {
+                Products = products.Select(x => new ProductViewModel()
+                {
+                    Id = x.Id,
+                    Name = x.Name,
+                    PictureUri= x.PictureUri,
+                    Price = x.Price,
+                }).ToList(),
+                Categories = await GetCategoriesAsync(),
+                Brands = await GetBrandsAsync(),
+                CategoryId= categoryId,
+                BrandId= brandId,
+                PaginationInfo = new PaginationInfoViewModel()
+                {
+                    PageId= pageId,
+                    ItemsOnPage = products.Count,
+                    TotalItems= totalItems
+                }
+            };
+
+            return vm;
+        }
+
+--------------------------------------------------------------------------------------------------
+
+61- Home/Index.cshtml sayfasına en alta ekle
+
+@{ var pi = Model.PaginationInfo; }
+
+<div class="d-flex justify-content-center">
+    <nav aria-label="Page navigation example">
+        <ul class="pagination">
+            @if (pi.HasPrevious)
+            {
+                <li class="page-item">
+                    <a class="page-link" asp-route-categoryId="@Model.CategoryId" asp-route-brandId="@Model.BrandId" asp-route-pageId="@(pi.PageId-1)" aria-label="Previous">
+                        <span aria-hidden="true">&laquo;</span>
+                    </a>
+                </li>
+            }
+            else
+            {
+                <li class="page-item disabled">
+                    <a class="page-link" aria-label="Previous">
+                        <span aria-hidden="true">&laquo;</span>
+                    </a>
+                </li>
+            }
+
+            @for (int i = 1; i <= pi.TotalPages; i++)
+            {
+                <li class="page-item @(i == pi.PageId ? "active" : "")">
+                    <a class="page-link" asp-route-categoryId="@Model.CategoryId" asp-route-brandId="@Model.BrandId" asp-route-pageId="@i">
+                        @i
+                    </a>
+                </li>
+
+            }
+            @if (pi.HasNext)
+            {
+                <li class="page-item">
+                    <a class="page-link" asp-route-categoryId="@Model.CategoryId" asp-route-brandId="@Model.BrandId" asp-route-pageId="@(pi.PageId+1)" aria-label="Next">
+                        <span aria-hidden="true">&raquo;</span>
+                    </a>
+                </li>
+            }
+            else
+            {
+                <li class="page-item disabled">
+                    <a class="page-link" aria-label="Next">
+                        <span aria-hidden="true">&raquo;</span>
+                    </a>
+                </li>
+            }
+        </ul>
+    </nav>
+</div>
+<div class="text-center">Showing @pi.RangeStart-@pi.RangeEnd of @pi.TotalItems products</div>
+
+--------------------------------------------------------------------------------------------------
+
+62- PaginationInfoViewModel içine en sona property ekleyip metot yaz. Buradaki amaç 6 sayfanın 4. sayfasındaysak <1...3 _4_ 5 ... 12> gibi gözükecek 
+
+ public int[] PageNumbers => Pagination(PageId, TotalPages);
+
+        private int[] Pagination(int current, int last)
+        {
+            int delta = 1;
+            int left = current - delta;
+            int right = current + delta + 1;
+            var range = new List<int>();
+            var rangeWithDots = new List<int>();
+            int? l = null;
+
+            for (var i = 1; i <= last; i++)
+            {
+                if (i == 1 || i == last || i >= left && i < right)
+                {
+                    range.Add(i);
+                }
+            }
+
+            foreach (var i in range)
+            {
+                if (l != null)
+                {
+                    if (i - l == 2)
+                    {
+                        rangeWithDots.Add(l.Value + 1);
+                    }
+                    else if (i - l != 1)
+                    {
+                        rangeWithDots.Add(-1);
+                    }
+                }
+                rangeWithDots.Add(i);
+                l = i;
+            }
+
+            return rangeWithDots.ToArray();
+        }
+    }
+
+--------------------------------------------------------------------------------------------------
+
+63-Index.cshtml'de bu kodu değiştir
+
+            @for (int i = 1; i <= pi.TotalPages; i++)
+            {
+                <li class="page-item @(i == pi.PageId ? "active" : "")">
+                    <a class="page-link" asp-route-categoryId="@Model.CategoryId" asp-route-brandId="@Model.BrandId" asp-route-pageId="@i">
+                        @i
+                    </a>
+                </li>
+            }
+yerine
+
+            @foreach (var i in pi.PageNumbers)
+            {
+                if (i > 0)
+                {
+                    <li class="page-item @(i == pi.PageId ? "active" : "")">
+                        <a class="page-link" asp-route-categoryId="@Model.CategoryId" asp-route-brandId="@Model.BrandId" asp-route-pageId="@i">
+                            @i
+                        </a>
+                    </li>
+                }
+                else
+                {
+                    <li class="page-item disabled">
+                        <a class="page-link" asp-route-categoryId="@Model.CategoryId" asp-route-brandId="@Model.BrandId" asp-route-pageId="@i">
+                            <span aria-hidden="true">&hellip;</span>
+                        </a>
+                    </li>
+                }
+            }
+
+
+--------------------------------------------------------------------------------------------------
+
+64- ApplicaitonCore > Entities içine "BasketItem.cs" oluştur
+
+    public class BasketItem : BaseEntity
+    {
+        public int BasketId { get; set; }
+        public int ProductId { get; set; }
+        public int Quantity { get; set; }
+        public Product Product { get; set; } = null!;
+    }
+
+--------------------------------------------------------------------------------------------------
+
+65- ApplicaitonCore > Entities içine "Basket.cs" oluştur
+
+    public class Basket: BaseEntity
+    {
+        public string BuyerId { get; set; } = null!;
+        public List<BasketItem> Items { get; set; } = new();
+    }
+--------------------------------------------------------------------------------------------------
+
+66-Infrastructure > Data > Config içine "BasketConfiguration.cs" oluştur
+
+ public class BasketConfiguration : IEntityTypeConfiguration<Basket>
+    {
+        public void Configure(EntityTypeBuilder<Basket> builder)
+        {
+            builder.Property(x => x.BuyerId)
+                .IsRequired();
+        }
+    }
+
+--------------------------------------------------------------------------------------------------
+
+67- Tekrar migration ve update yap 
+
+Add-Migration BasketAdded -context ShopContext -OutputDir Data/Migrations
+Update-Database -context ShopContext
+
+--------------------------------------------------------------------------------------------------
+
+68- ApplicationCore > Interfaces "IBasketService.cs" interface aç
+
+    public interface IBasketService
+    {
+        Task<Basket> GetOrCreateBasketAsync(string buyerId);
+        Task<Basket> AddItemToBasketAsync(string buyerId, int productId, int quantity);
+        Task EmptyBasketAsync(string buyerId);
+        Task DeleteBasketItemAsync(string buyerId, int productId);
+        Task<Basket> SetQuantities(string buyerId, Dictionary<int, int> quantities);
+        Task TransferBasketAsync(string sourceBuyerId, string destinationBuyerId);
+    }
+
+--------------------------------------------------------------------------------------------------
+
+69- ApplicationCore > Specifications içine "BasketWithItemsSpecification.cs" aç
+
+ public BasketWithItemsSpecification(string buyerId)
+        {
+            Query.Where(x => x.BuyerId == buyerId)
+                .Include(x => x.Items)
+                .ThenInclude(x => x.Product);
+        }
+
+
+
+--------------------------------------------------------------------------------------------------
+
+70- ApplicationCore içine Services klasörü aç içine "BasketService.cs" sınıfı aç
+
+using ApplicationCore.Entities;
+using ApplicationCore.Interfaces;
+using ApplicationCore.Specifications;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace ApplicationCore.Services
+{
+    public class BasketService : IBasketService
+    {
+        private readonly IRepository<Basket> _basketRepo;
+        private readonly IRepository<BasketItem> _basketItemRepo;
+        private readonly IRepository<Product> _productRepo;
+
+        public BasketService(IRepository<Basket> basketRepo,
+            IRepository<BasketItem> basketItemRepo,
+            IRepository<Product> productRepo)
+        {
+            _basketRepo = basketRepo;
+            _basketItemRepo = basketItemRepo;
+            _productRepo = productRepo;
+        }
+        public async Task<Basket> AddItemToBasketAsync(string buyerId, int productId, int quantity)
+        {
+            var basket = await GetOrCreateBasketAsync(buyerId);
+            var basketItem = basket.Items.FirstOrDefault(x => x.ProductId == productId);
+
+            if (basketItem == null)
+            {
+                basketItem = new BasketItem()
+                {
+                    ProductId = productId,
+                    Quantity = quantity,
+                    Product = (await _productRepo.GetByIdAsync(productId))!
+                };
+                basket.Items.Add(basketItem);
+            }
+            else
+            {
+                basketItem.Quantity += quantity;
+            }
+            await _basketRepo.UpdateAsync(basket);
+            return basket;
+        }
+
+        public async Task DeleteBasketItemAsync(string buyerId, int productId)
+        {
+            var basket = await GetOrCreateBasketAsync(buyerId);
+            var basketItem = basket.Items.FirstOrDefault(x => x.ProductId == productId);
+            if (basketItem == null) return;
+            await _basketItemRepo.DeleteAsync(basketItem);
+        }
+
+        public async Task EmptyBasketAsync(string buyerId)
+        {
+            var basket = await GetOrCreateBasketAsync(buyerId);
+
+            foreach (var item in basket.Items.ToList())
+            {
+                await _basketItemRepo.DeleteAsync(item);
+            }
+        }
+
+        public async Task<Basket> GetOrCreateBasketAsync(string buyerId)
+        {
+            var specBasket = new BasketWithItemsSpecification(buyerId);
+            var basket = await _basketRepo.FirsOrDefaultAsync(specBasket);
+
+            if (basket == null)
+            {
+                basket = new Basket() { BuyerId = buyerId };
+                await _basketRepo.AddAsync(basket);
+            }
+
+            return basket;
+        }
+        public async Task<Basket> SetQuantities(string buyerId, Dictionary<int, int> quantities)
+        {
+            var basket = await GetOrCreateBasketAsync(buyerId);
+
+            foreach (var item in basket.Items)
+            {
+                if (quantities.ContainsKey(item.ProductId))
+                {
+                    item.Quantity = quantities[item.ProductId];
+                    await _basketItemRepo.UpdateAsync(item);
+                }
+            }
+
+            return basket;
+
+        }
+
+        public async Task TransferBasketAsync(string sourceBuyerId, string destinationBuyerId)
+        {
+            var specSourceBasket = new BasketWithItemsSpecification(sourceBuyerId);
+            var sourceBasket = await _basketRepo.FirsOrDefaultAsync(specSourceBasket);
+
+            if (sourceBasket == null || sourceBasket.Items.Count == 0)
+                return;
+
+            var destinationBasket = await GetOrCreateBasketAsync(destinationBuyerId);
+
+            foreach (var item in sourceBasket.Items)
+            {
+                var targetItem = destinationBasket.Items.FirstOrDefault(x => x.ProductId == item.ProductId);
+
+                if (targetItem == null)
+                    destinationBasket.Items.Add(new BasketItem()
+                    {
+                        ProductId = item.ProductId,
+                        Quantity = item.Quantity,
+                    });
+                else
+                {
+                    targetItem.Quantity += item.Quantity;
+                }
+
+                await _basketRepo.UpdateAsync(destinationBasket);
+                await _basketRepo.DeleteAsync(sourceBasket);
+            }
+        }
+    }
+}
+
+
+--------------------------------------------------------------------------------------------------
+
+71- Layout <partial view> altına ekle
+
+                    <partial name="_LoginPartial" />
+                    @{ /* todo : burayı ivewcomponent yap,sepetteki toplam öğe sayısını göster */ }
+                    <ul class="navbar-nav">
+                        <li class="nav-item">
+                            <a class="nav-link text-dark" asp-area="" asp-controller="Basket" asp-action="Index">
+                                Basket
+                                <span data-total-items class="badge bg-success">0</span>
+                            </a>
+                        </li>
+                    </ul>
+
+--------------------------------------------------------------------------------------------------
+
+72- Home>Index te foreach içindekini değiştir
+
+                <button class="btn btn-sm btn-outline-dark" data-add-to-basket="@item.Id">
+                    <i class="fa-solid fa-cart-plus"></i>
+                </button>
+
+--------------------------------------------------------------------------------------------------
+
+73-Home > Index script kısmına yaz
+
+@section Scripts{
+    <script>
+        $("[data-add-to-basket").click(function () {
+            let productId = $(this).data("add-to-basket");
+            let url = "@Url.Action("AddToBasket", "Basket")";
+
+            $.post(url, { productId }, function (data) {
+                $("[data-total-items]").text(data.totalItems);
+            });
+        });
+    </script>
+}
+
+--------------------------------------------------------------------------------------------------
+
+74- Web > Models içine "BasketViewModel.cs" oluştur
+
+    public class BasketViewModel
+    {
+        public int Id { get; set; }
+        public string BuyerId { get; set; } = null!;
+        public List<BasketItemViewModel> Items { get; set; } = new();
+        public int TotalItems => Items.Sum(x => x.Quantity);
+        public decimal TotalPrice => Items.Sum(X => X.TotalPrice);
+    }
+
+
+
+
+
+--------------------------------------------------------------------------------------------------
+
+75- Web > Model içine "BasketItemViewModel.cs" oluştur
+
+    public class BasketItemViewModel
+    {
+        public int Id { get; set; }
+        public int ProductId { get; set; }
+        public int ProductName { get; set; }
+        public decimal UnitPrice { get; set; }
+        public int Quantity { get; set; }
+        public string? PictureUri { get; set; }
+        public decimal TotalPrice => Quantity * UnitPrice;
+    }
+
+--------------------------------------------------------------------------------------------------
+
+76- Web > Interface içine "IBasketViewModelService.cs" interface aç
+
+ public interface IBasketViewModelService
+    {
+        Task<BasketViewModel> GetBasketViewModelAsync();
+
+        Task<BasketViewModel> AddItemToBasketAsync(int productId, int quantity);
+    }
+
+--------------------------------------------------------------------------------------------------
+
+77- Web > Interface içine "IHomeViewModelService.cs" interface aç
+
+    public interface IHomeViewModelService
+    {
+        Task<HomeViewModel> GetHomeViewModelAsync(int? categoryId, int? brandId, int pageId = 1);
+    }
+--------------------------------------------------------------------------------------------------
+
+78- Web > Constants içine ekle
+	public const string BASKET_COOKIENAME = "AnonId";
+
+--------------------------------------------------------------------------------------------------
+
+79- MVC katmanına Controller içine "BasketController" oluştur
+
+--------------------------------------------------------------------------------------------------
+
+80- Program.cs içine ekle
+
+builder.Services.AddScoped<IBasketViewModelService, BasketViewModelService>();
+builder.Services.AddHttpContextAccessor();
+
+--------------------------------------------------------------------------------------------------
+
+81-
+
+--------------------------------------------------------------------------------------------------
+
+82-Web > Serivce içine 
+
+--------------------------------------------------------------------------------------------------
+
+83-
+
+--------------------------------------------------------------------------------------------------
+
+84- 
+
+--------------------------------------------------------------------------------------------------
+
+85-
+
+--------------------------------------------------------------------------------------------------
+
+86-
+
+--------------------------------------------------------------------------------------------------
+
+87-
+
+--------------------------------------------------------------------------------------------------
+
+88-
+
+--------------------------------------------------------------------------------------------------
+
+89-
+
+
+
+
+
+
 
 
 

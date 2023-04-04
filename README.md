@@ -31,6 +31,8 @@ commands on the projects "Infrastructure"
 ```
 Add-Migration InitialCreate -context ShopContext -OutputDir Data/Migrations
 Update-Database -context ShopContext
+
+Add-Migration BasketAdded -context ShopContext -OutputDir Data/Migrations
 ```
 
 ```
