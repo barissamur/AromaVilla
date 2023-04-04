@@ -1357,8 +1357,46 @@ yeni tablo isimlerini veritabanına eklemek için
 Update-Database -context ShopContext
 --------------------------------------------------------------------------------------------------
 
-84-
+84- Program açılırken sepet sayısını güncel gelsin. ViewComponent ile yapıyoruz
 
+	1- Web katmanında "ViewComponents" klasörü aç içine
+	2- "BasketNavbarViewComponent.cs" oluştur ve ViewComponent miras al
+
+    public class BasketNavbarViewComponent : ViewComponent
+    {
+        private readonly IBasketViewModelService _basketViewModelService;
+
+        public BasketNavbarViewComponent(IBasketViewModelService basketViewModelService)
+        {
+            _basketViewModelService = basketViewModelService;
+        }
+
+        public async Task<IViewComponentResult> InvokeAsync()
+        {
+            return View(await _basketViewModelService.GetBasketViewModelAsync());
+        }
+    }
+
+	3- Views > Shared içine "Components" klasörü aç içine "BasketNavbar" kalsörü aç içine 
+	"Default.cshtml" view oluştur.
+
+@model BasketViewModel
+
+
+<ul class="navbar-nav">
+    <li class="nav-item">
+        <a class="nav-link text-dark" asp-area="" asp-controller="Basket" asp-action="Index">
+            Basket
+            <span data-total-items class="badge bg-success">@Model.TotalItems</span>
+        </a>
+    </li>
+</ul>
+
+	4- "_ViewImports.cshtml" dosyasına  ekle
+
+@addTagHelper *, Web (proje adı)
+
+	5- "_Layout.cshtml" içinde "<vc:basket-navbar/>" olarak kullanabiliriz
 --------------------------------------------------------------------------------------------------
 
 85-
