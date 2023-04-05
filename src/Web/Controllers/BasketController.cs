@@ -15,5 +15,33 @@ namespace Web.Controllers
             var vm = await _basketViewModelService.AddItemToBasketAsync(productId, quantity);
             return Json(vm);
         }
+
+        public async Task<IActionResult> Index()
+        {
+            var vm = await _basketViewModelService.GetBasketViewModelAsync();
+            return View(vm);
+        }
+
+        [HttpPost, ValidateAntiForgeryToken]
+        public async Task<IActionResult> Empty()
+        {
+            await _basketViewModelService.EmptyBasketAsync();
+            return RedirectToAction(nameof(Index));
+        }
+
+        [HttpPost, ValidateAntiForgeryToken]
+        public async Task<IActionResult> Delete(int productId)
+        {
+            await _basketViewModelService.DeleteBasketItemAsync(productId);
+            return RedirectToAction(nameof(Index));
+        }
+
+        [HttpPost, ValidateAntiForgeryToken]
+        // <input name =quantities[3]" value="12"> dictioanry içindeki intler [3] ve 12'den geliyo name ile bunu "quantities" olarak kısıtlıyoruz
+        public async Task<IActionResult> Update([ModelBinder(Name ="quantities")] Dictionary<int, int> quantities) 
+        {
+            await _basketViewModelService.UpdateBasketAsync(quantities);
+            return RedirectToAction(nameof(Index));
+        }
     }
 }

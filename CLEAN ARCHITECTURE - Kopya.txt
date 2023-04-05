@@ -1215,35 +1215,188 @@ namespace ApplicationCore.Services
 --------------------------------------------------------------------------------------------------
 
 78- Web > Constants içine ekle
+
 	public const string BASKET_COOKIENAME = "AnonId";
 
 --------------------------------------------------------------------------------------------------
 
-79- MVC katmanına Controller içine "BasketController" oluştur
-
---------------------------------------------------------------------------------------------------
-
-80- Program.cs içine ekle
+79- Program.cs içine ekle
 
 builder.Services.AddScoped<IBasketViewModelService, BasketViewModelService>();
 builder.Services.AddHttpContextAccessor();
 
 --------------------------------------------------------------------------------------------------
 
-81-
+80- Web içine Extensions klasörü aç "MappingExtensions.cs" klasörü aç 
+önce "program.cs" içine "global using Web.Extensions;" ekle
+
+using System.Runtime.CompilerServices;
+
+namespace Web.Extensions
+{
+    public static class MappingExtensions
+    {
+        public static BasketViewModel ToBasketViewModel(this Basket basket)
+        {
+            return new BasketViewModel()
+            {
+                BuyerId = basket.BuyerId,
+                Id = basket.Id,
+                Items = basket.Items.Select(x => new BasketItemViewModel()
+                {
+                    Id = basket.Id,
+                    PictureUri = x.Product.PictureUri,
+                    ProductId = x.ProductId,
+                    ProductName = x.Product.Name,
+                    Quantity = x.Quantity,
+                    UnitPrice = x.Product.Price
+                }).ToList()
+            };
+        }
+    }
+}
+
 
 --------------------------------------------------------------------------------------------------
 
-82-Web > Serivce içine 
+81- Web > Serivce içine "BasketViewModelService.cs" oluştur
+
+using System.Security.Claims;
+using Web.Interfaces;
+
+namespace Web.Services
+{
+    public class BasketViewModelService : IBasketViewModelService
+    {
+        private readonly IBasketService _basketService;
+        private readonly IHttpContextAccessor _httpContextAccessor;
+
+        private HttpContext? HttpContext => _httpContextAccessor.HttpContext;
+        private string? UserId => HttpContext?.User.FindFirstValue(ClaimTypes.NameIdentifier); // giriş yapanın id'si
+        private string? AnonId => HttpContext?.Request.Cookies[Constants.BASKET_COOKIENAME]; //cookie'nin adı
+        private string BuyerId => UserId ?? AnonId ?? CreateAnonymousId();
+
+        private string _createAnonId = null!;
+        private string CreateAnonymousId()
+        {
+            if (_createAnonId == null)
+            {
+                _createAnonId = Guid.NewGuid().ToString();
+                HttpContext?.Response.Cookies.Append(Constants.BASKET_COOKIENAME, _createAnonId, new CookieOptions()
+                {
+                    Expires = DateTime.Now.AddDays(14), // 14 gün geçerli olsun
+                    IsEssential = true // gerekli bir cookie mi?
+                });
+            }
+
+            return _createAnonId;
+        }
+
+        public BasketViewModelService(IBasketService basketService,
+            IHttpContextAccessor httpContextAccessor)
+        {
+            _basketService = basketService;
+            _httpContextAccessor = httpContextAccessor;
+        }
+        public async Task<BasketViewModel> AddItemToBasketAsync(int productId, int quantity)
+        {
+            var basket = await _basketService.AddItemToBasketAsync(BuyerId, productId, quantity);
+            return basket.ToBasketViewModel();
+
+        }
+
+        public async Task<BasketViewModel> GetBasketViewModelAsync()
+        {
+            var basket = await _basketService.GetOrCreateBasketAsync(BuyerId);
+
+            return basket.ToBasketViewModel();
+        }
+
+
+    }
+}
+
 
 --------------------------------------------------------------------------------------------------
 
-83-
+82-  MVC katmanına Controller içine "BasketController" oluştur
+
+    public class BasketController : Controller
+    {
+        private readonly IBasketViewModelService _basketViewModelService;
+
+        public BasketController(IBasketViewModelService basketViewModelService)
+        {
+            _basketViewModelService = basketViewModelService;
+        }
+        public async Task<IActionResult> AddToBasket(int productId, int quantity = 1)
+        {
+            var vm = await _basketViewModelService.AddItemToBasketAsync(productId, quantity);
+            return Json(vm);
+        }
+    }
 
 --------------------------------------------------------------------------------------------------
 
-84- 
+83- Basket'i Context'e DbSet olarak eklemedik tablo adı farklı oluştu onu düzenlicez
 
+tabloyu silmek için
+update-database InitialCreate -context ShopContext
+
+migration'u silmek için
+remove-migration -context ShopContext
+
+ShopContext içine ekle
+	  public DbSet<Basket> Baskets => Set<Basket>();
+        public DbSet<BasketItem> BasketItems => Set<BasketItem>();
+
+tekrar migration ekledik
+Add-Migration InitialCreate -context ShopContext -OutputDir Data/Migrations
+
+yeni tablo isimlerini veritabanına eklemek için
+Update-Database -context ShopContext
+--------------------------------------------------------------------------------------------------
+
+84- Program açılırken sepet sayısını güncel gelsin. ViewComponent ile yapıyoruz
+
+	1- Web katmanında "ViewComponents" klasörü aç içine
+	2- "BasketNavbarViewComponent.cs" oluştur ve ViewComponent miras al
+
+    public class BasketNavbarViewComponent : ViewComponent
+    {
+        private readonly IBasketViewModelService _basketViewModelService;
+
+        public BasketNavbarViewComponent(IBasketViewModelService basketViewModelService)
+        {
+            _basketViewModelService = basketViewModelService;
+        }
+
+        public async Task<IViewComponentResult> InvokeAsync()
+        {
+            return View(await _basketViewModelService.GetBasketViewModelAsync());
+        }
+    }
+
+	3- Views > Shared içine "Components" klasörü aç içine "BasketNavbar" kalsörü aç içine 
+	"Default.cshtml" view oluştur.
+
+@model BasketViewModel
+
+
+<ul class="navbar-nav">
+    <li class="nav-item">
+        <a class="nav-link text-dark" asp-area="" asp-controller="Basket" asp-action="Index">
+            Basket
+            <span data-total-items class="badge bg-success">@Model.TotalItems</span>
+        </a>
+    </li>
+</ul>
+
+	4- "_ViewImports.cshtml" dosyasına  ekle
+
+@addTagHelper *, Web (proje adı)
+
+	5- "_Layout.cshtml" içinde "<vc:basket-navbar/>" olarak kullanabiliriz
 --------------------------------------------------------------------------------------------------
 
 85-
