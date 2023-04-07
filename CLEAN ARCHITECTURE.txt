@@ -1688,24 +1688,310 @@ app.UseTransferBasket();
 
 --------------------------------------------------------------------------------------------------
 
-90 - 
+100 - Entities içine "Order.cs" , "OrderItem.cs" , "Address.cs" sınıfları aç
+
+Adress.cs 
+
+        public Address()
+        {
+        }
+
+        public Address(string street, string city, string? state, string country, string zipCode)
+        {
+            Street = street;
+            City = city;
+            State = state;
+            Country = country;
+            ZipCode = zipCode;
+        }
+        public string Street { get; set; } = null!;
+        public string City { get; set; } = null!;
+        public string? State { get; set; } = null!;
+        public string Country { get; set; } = null!;
+        public string ZipCode { get; set; } = null!;
+
+    }
+
+Order.cs 
+
+    public class Order : BaseEntity
+    {
+        public string BuyerId { get; set; } = null!;
+        public Address ShippingAddress { get; set; } = null!;
+        public DateTimeOffset OrderDate { get; set; } = DateTimeOffset.Now;
+        public List<OrderItem> Items { get; set; } = new();
+    }
+
+OrderItem.cs
+
+    public class OrderItem
+    {
+        public int OrderId { get; set; }
+        public int ProductId { get; set; }
+        public string ProductName { get; set; } = null!;
+        public int Quantity { get; set; }
+        public decimal UnitPrice { get; set; }
+        public string? PictureUri { get; set; }
+        public Product Product { get; set; } = null!;
+    }
+
+--------------------------------------------------------------------------------------------------
+
+101- ApplicationCore katmanında Interface klasörüne IOrderService.cs interface aç
+
+    public interface IOrderService
+    {
+        Task CreateOrderAsync(string buyerId, Address shippingAdress);
+    }
+
+--------------------------------------------------------------------------------------------------
+
+102- Core katmaınında Services klasörüne OrderService.cs sınfıı aç
+
+    public class OrderService : IOrderService
+    {
+        private readonly IBasketService _basketService;
+        private readonly IRepository<Order> _orderRepo;
+
+        public OrderService(IBasketService basketService,
+            IRepository<Order> orderRepo)
+        {
+            _basketService = basketService;
+            _orderRepo = orderRepo;
+        }
+        public async Task<Order> CreateOrderAsync(string buyerId, Address shippingAdress)
+        {
+            var basket = await _basketService.GetOrCreateBasketAsync(buyerId);
+
+            Order order = new Order()
+            {
+                ShippingAddress = shippingAdress,
+                BuyerId = buyerId,
+                Items = basket.Items.Select(x => new OrderItem()
+                {
+                    PictureUri = x.Product.PictureUri,
+                    ProductId = x.ProductId,
+                    ProductName = x.Product.Name,
+                    Quantity = x.Quantity,
+                    UnitPrice = x.Product.Price
+                }).ToList()
+            };
+
+            return await _orderRepo.AddAsync(order);
+        }
+
+--------------------------------------------------------------------------------------------------
+
+103- Program.cs içine ekle
+
+builder.Services.AddScoped<IOrderService, OrderService>();
+
+
+--------------------------------------------------------------------------------------------------
+
+104- ShopContext.cs içine dbsetleri ekle
+
+        public DbSet<Order> Orders => Set<Order>();
+        public DbSet<OrderItem> OrderItems => Set<OrderItem>();
+
+--------------------------------------------------------------------------------------------------
+
+105- Ifrastructure > Data > Config içine "OrderItemConfiguration.cs" aç
+
+    public class OrderItemConfiguration : IEntityTypeConfiguration<OrderItem>
+    {
+        public void Configure(EntityTypeBuilder<OrderItem> builder)
+        {
+            // sql ondelete konusu
+            // her sipariş öğesinin bir product'ı vardır. sipariş silinirse ürünü silme
+            // ürün daha önce siparişlerde kullanılmışsa silmez
+            builder.HasOne(x => x.Product)
+                .WithMany()
+                .OnDelete(DeleteBehavior.Restrict);
+
+            builder.Property(x => x.ProductName)
+                .HasMaxLength(100);
+
+            builder.Property(x => x.UnitPrice)
+                .HasPrecision(18, 2);
+
+        }
+
+    }
+
+--------------------------------------------------------------------------------------------------
+
+106- Ifrastructure > Data > Config içine "OrderConfiguration.cs" aç
+
+    public class OrderConfiguration : IEntityTypeConfiguration<Order>
+    {
+        public void Configure(EntityTypeBuilder<Order> builder)
+        {
+            // address sınıfı veritabanına eklenmedi. adresin property'leri order içine eklendi
+            builder.OwnsOne(x => x.ShippingAddress, ba =>   // içinde shippingadres yer alır ve onun özellikleri
+            {
+                ba.WithOwner(); //her shipping adresin mutlaka sahibi vardır
+
+                ba.Property(a => a.Street)
+                    .HasMaxLength(180);
+
+                ba.Property(a => a.City)
+                    .HasMaxLength(100);
+
+                ba.Property(a => a.State)
+                    .HasMaxLength(60);
+
+                ba.Property(a => a.Country)
+                    .HasMaxLength(90);
+
+                ba.Property(a => a.ZipCode)
+                    .HasMaxLength(18);
+            });
+        }
+    }
+
+--------------------------------------------------------------------------------------------------
+
+107- Web > Models içine "CheckoutViewModel.cs" sınıfı aç
+
+using System.ComponentModel.DataAnnotations;
+using System.Xml.Linq;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
+
+namespace Web.Models
+{
+    public class CheckoutViewModel
+    {
+        public BasketViewModel? Basket { get; set; }
+
+        [Required, MaxLength(180)]
+        [Display(Name = "Street")]
+        public string Street { get; set; } = null!;
+
+        [Required, MaxLength(100)]
+        [Display(Name = "City")]
+        public string City { get; set; } = null!;
+
+        [MaxLength(60)]
+        [Display(Name = "State")]
+        public string? State { get; set; }
+
+        [Required, MaxLength(90)]
+        [Display(Name = "Country")]
+        public string Country { get; set; } = null!;
+
+        [Required, MaxLength(18)]
+        [Display(Name = "Zip")]
+        public string ZipCode { get; set; } = null!;
+
+        [Required]
+        [Display(Name = "Name on card")]
+        public string CCHolder { get; set; } = null!;
+
+        [Required, CreditCard]
+        [Display(Name = "Credit card number")]
+        public string CCNumber { get; set; } = null!;
+
+        [Required, RegularExpression(@"^[0-9]{2}\/[0-9]{2}$", ErrorMessage = "Invalid {0}.")]
+        [Display(Name = "Expiration")]
+        public string CCExpiration { get; set; } = null!;
+
+        [Required, RegularExpression("^[0-9]{3}$", ErrorMessage = "Invalid {0}.")]
+        [Display(Name = "CVV")]
+        public string CCCvv { get; set; } = null!;
+    }
+}
+
+--------------------------------------------------------------------------------------------------
+
+108- BasketController.cs sınıfına yeni action ekle
+
+        [Authorize]
+        public async Task<IActionResult> Checkout()
+        {
+            var basket = await _basketViewModelService.GetBasketViewModelAsync();
+            var vm = new CheckoutViewModel()
+            {
+                Basket = basket
+            };
+            return View(vm);
+        }
 
 
 
+--------------------------------------------------------------------------------------------------
 
+109- IBasketViewModelService.cs içine ekle
 
+        Task CheckoutAsync(string street, string city, string? state, string country, string zipcode);
 
+--------------------------------------------------------------------------------------------------
 
+110- BasketViewModelService.cs implement et
 
+        public async Task CheckoutAsync(string street, string city, string? state, string country, string zipCode)
+        {
+            var shippingAddress = new Address(street, city, state, country, zipCode);
+            await _orderService.CreateOrderAsync(BuyerId, shippingAddress);
+            await _basketService.EmptyBasketAsync(BuyerId);
+        }
+--------------------------------------------------------------------------------------------------
 
+111- BasketController.cs sınıfına yeni action ekle
 
+        [Authorize, HttpPost, ValidateAntiForgeryToken]
+        public async Task<IActionResult> Checkout(CheckoutViewModel vm)
+        {
+            if (ModelState.IsValid)
+            {
+                // payment
 
+                await _basketViewModelService.CheckoutAsync(vm.Street, vm.City, vm.State, vm.Country, vm.ZipCode);
+                return RedirectToAction("OrderConfirmed");
+            }
 
+            vm.Basket = await _basketViewModelService.GetBasketViewModelAsync();
+            return View(vm);
+        }
 
+--------------------------------------------------------------------------------------------------
 
+112- Checkout action'ına yeni View oluştur
 
+Checkout.cshtml içeriğini yapıştır
 
+--------------------------------------------------------------------------------------------------
 
+113- PostgreSql DateTimeOffSet hatası geliyor. Çözümü için ShopContext içine ekle
+
+        public ShopContext(DbContextOptions<ShopContext> options) : base(options)
+        {
+            AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
+        }
+
+--------------------------------------------------------------------------------------------------
+
+114- 
+
+--------------------------------------------------------------------------------------------------
+
+115- 
+
+--------------------------------------------------------------------------------------------------
+
+116- 
+
+--------------------------------------------------------------------------------------------------
+
+117- 
+
+--------------------------------------------------------------------------------------------------
+
+118- 
+
+--------------------------------------------------------------------------------------------------
+
+119- 
 
 
 
