@@ -1971,11 +1971,23 @@ Checkout.cshtml içeriğini yapıştır
 
 --------------------------------------------------------------------------------------------------
 
-114- 
+114- Core içine Exceptions klasörü aç "EmptyBasketException.cs" sınıfı aç
+
+    public class EmptyBasketException : Exception
+    {
+        public EmptyBasketException() : base("Basket cannot be empty.")
+        {
+
+        }
+    }
 
 --------------------------------------------------------------------------------------------------
 
-115- 
+115- UnitTests > ApplicationCore > OrderServiceTests klasörleri aç "CreateOrder.cs" sınıfı aç
+
+	unit katmanına "Install-Package Moq" paketi yükle (yalandan repoları kullanmak için)
+
+
 
 --------------------------------------------------------------------------------------------------
 

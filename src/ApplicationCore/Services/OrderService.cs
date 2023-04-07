@@ -1,4 +1,5 @@
 ﻿using ApplicationCore.Entities;
+using ApplicationCore.Exceptions;
 using ApplicationCore.Interfaces;
 using System;
 using System.Collections.Generic;
@@ -22,6 +23,11 @@ namespace ApplicationCore.Services
         public async Task<Order> CreateOrderAsync(string buyerId, Address shippingAdress)
         {
             var basket = await _basketService.GetOrCreateBasketAsync(buyerId);
+
+            if (basket.Items.Count == 0)
+            {
+                throw new EmptyBasketException();
+            }
 
             Order order = new Order()
             {
